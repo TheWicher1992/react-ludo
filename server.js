@@ -1,6 +1,6 @@
 const http = require('http')
 
-const PORT = 8000
+const PORT = 8080
 const fs = require('fs')
 const WebSocket = require('ws')
 const currentState = [[['blue', 'blue', 'blue', 'blue'], [], [], [], [], [], [], [], [], [], [], [], [], [], ['red', 'red', 'red', 'red']], [[], [], [], [], [], [], [], [], [], [], [], [], [], []
