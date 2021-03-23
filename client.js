@@ -1,4 +1,4 @@
-const ludoSocket = new WebSocket("ws://localhost:9000");
+const ludoSocket = new WebSocket("ws://react-ludo-heuec.ondigitalocean.app/:9000");
 
 const { useState, Fragment } = React;
 
