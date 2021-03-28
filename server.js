@@ -1,5 +1,9 @@
 const http = require('http')
-
+const https = require('https')
+const options = {
+    key: fs.readFileSync('key.pem'),
+    cert: fs.readFileSync('cert.pem')
+};
 const PORT = 8000
 const fs = require('fs')
 const WebSocket = require('ws')
@@ -44,7 +48,7 @@ const sendPromisify = (ws, data) =>
     })
 
 
-const server = http.createServer(async (req, res) => {
+const server = https.createServer(options, async (req, res) => {
     console.log(req.url)
     if (req.url === '/') {
         res.end(await readFile('client.html'))
@@ -221,7 +225,7 @@ const sendWinMesage = (winner) => {
     })
 }
 
-const wss = new WebSocket.Server({ port: 9000 })
+const wss = new WebSocket.Server({ server })
 
 const printDiceState = () => {
     players.forEach(player => console.log(playerColorMap.get(player)))
