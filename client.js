@@ -1,18 +1,33 @@
-const ludoSocket = new WebSocket("ws://localhost:9000");
+let ludoSocket = new WebSocket("ws://localhost:9000");
+let diceSound = new Audio('dice_sound.mp3')
+
+
 
 const { useState, Fragment } = React;
 
 const Ludo = () => {
-  const [board, setBoard] = React.useState([]);
-  const [dice, setDice] = React.useState(0);
-  const [color, setColor] = React.useState(``);
-  const [turn, setTurn] = React.useState("");
+  const [board, setBoard] = useState([]);
+  const [dice, setDice] = useState(0);
+  const [color, setColor] = useState(``);
+  const [turn, setTurn] = useState("");
   const [serverMsg, setServerMsg] = useState("");
   const [end, setEnd] = useState(false);
+
+  const resetState = () => {
+    ludoSocket = new WebSocket("ws://localhost:9000");
+    setBoard([])
+    setDice(0)
+    setTurn('')
+    setServerMsg('')
+    setEnd(false)
+  }
+
+
+
   ludoSocket.onmessage = (event) => {
+
     const message = JSON.parse(event.data);
 
-    //
     console.log(message);
 
     //actions
@@ -35,6 +50,9 @@ const Ludo = () => {
     if (message.type === "turn") {
       setTurn(message.turn);
     }
+    if (message.type === 'reset') {
+      resetState()
+    }
     if (message.type === "serverMessage") {
       setServerMsg(message.value);
       setTimeout(() => {
@@ -44,6 +62,7 @@ const Ludo = () => {
   };
 
   const onClick = (col, coords) => {
+    diceSound.play()
     console.log(col, coords);
     const action = {
       type: "click",
@@ -56,8 +75,9 @@ const Ludo = () => {
   };
   let serverMessage = (
     <div className="text_box">
-      {turn === "" && serverMsg === "" && "Waiting for players to join"}
+      {board.length == 0 && "Waiting for players to join"}
       {turn !== "" && `${turn}'s turn`}
+      <br />
       {serverMsg}
     </div>
   );
@@ -74,7 +94,8 @@ const Ludo = () => {
               >
                 {col.map((sprite, cellIndex) => (
                   <div
-                    onClick={() => {
+                    onClick={(e) => {
+                      console.log(e.target)
                       onClick(sprite, { row: rowIndex, col: colIndex });
                     }}
                     key={`${colIndex}${cellIndex}`}

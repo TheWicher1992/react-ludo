@@ -1,9 +1,9 @@
 const http = require('http')
 
-const PORT = 8080
+const PORT = 8000
 const fs = require('fs')
 const WebSocket = require('ws')
-const currentState = [[['blue', 'blue', 'blue', 'blue'], [], [], [], [], [], [], [], [], [], [], [], [], [], ['red', 'red', 'red', 'red']], [[], [], [], [], [], [], [], [], [], [], [], [], [], []
+const initialboard = [[['blue', 'blue', 'blue', 'blue'], [], [], [], [], [], [], [], [], [], [], [], [], [], ['red', 'red', 'red', 'red']], [[], [], [], [], [], [], [], [], [], [], [], [], [], []
     , []], [[], [], [], [], [], [], [], [], [], [], [], [], [], [], []], [[], [], [], [], [], []
     , [], [], [], [], [], [], [], [], []], [[], [], [], [], [], [], [], [], [], [], [], [], [], [
     ], []], [[], [], [], [], [], [], [], [], [], [], [], [], [], [], []], [[], [], [], [], [], [
@@ -15,12 +15,9 @@ const currentState = [[['blue', 'blue', 'blue', 'blue'], [], [], [], [], [], [],
     ], [], []], [['yellow', 'yellow', 'yellow', 'yellow'], [], [], [], [], [], [], [], [
     ], [], [], [], [], [], ['green', 'green', 'green', 'green']]]
 
+let boardState = JSON.parse(JSON.stringify(initialboard))
 
-currentState[0][6].push('yellow')
-currentState[7][3].push('blue')
-currentState[7][6].push('blue')
-currentState[7][6].push('blue')
-currentState[7][6].push('blue')
+//currentState[7][0].push('green')
 
 
 const readFile = (fileName) =>
@@ -30,6 +27,18 @@ const readFile = (fileName) =>
                 reject(readErr)
             } else {
                 resolve(fileContents)
+            }
+        })
+    })
+
+
+const sendPromisify = (ws, data) =>
+    new Promise((resolve, reject) => {
+        ws.send(JSON.stringify(data), (err) => {
+            if (err) {
+                reject(err)
+            } else {
+                resolve()
             }
         })
     })
@@ -48,6 +57,9 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.url === '/center.png') {
         res.end(await readFile('center.png'))
+    }
+    if (req.url === '/dice_sound.mp3') {
+        res.end(await readFile('dice_sound.mp3'))
     }
 })
 
@@ -84,7 +96,7 @@ const winningSpots = [
     '8,7'
 ]
 let wins = {
-    'blue': 3,
+    'blue': 0,
     'red': 0,
     'yellow': 0,
     'green': 0
@@ -99,6 +111,23 @@ let end = false
 
 const dice = () => (Math.floor(Math.random() * 6) + 1)
 const iskilled = (ox, oy) => (ox - 7) * (ox - 7) + (oy - 7) * (oy - 7) == 98
+
+const resetGameState = () => {
+    boardState = JSON.parse(JSON.stringify(initialboard))
+    playerColorMap = new WeakMap()
+    playerCount = 0
+    players = []
+    diceState = 0
+    currentPlayer = -1
+    end = false
+    wins = {
+        'blue': 0,
+        'red': 0,
+        'yellow': 0,
+        'green': 0
+    }
+}
+
 const getTurn = () => {
     currentPlayer = ((currentPlayer + 1) % 4)
     return currentPlayer + 1
@@ -111,10 +140,6 @@ const getCurrentPlayer = () => {
     return playerColors[currentPlayer + 1]
 }
 
-for (let index = 0; index < 10; index++) {
-    console.log(getTurn())
-}
-
 const send = (ws, action) => {
     ws.send(JSON.stringify(action))
 }
@@ -122,7 +147,7 @@ const send = (ws, action) => {
 const sendNewBoardState = (ws) => {
     const action = {
         type: 'newboard',
-        board: currentState
+        board: initialboard
     }
     send(ws, action)
 }
@@ -130,7 +155,7 @@ const sendNewBoardState = (ws) => {
 const sendCurrentBoardState = (ws) => {
     const action = {
         type: 'updateboard',
-        board: currentState
+        board: boardState
     }
     send(ws, action)
 }
@@ -155,12 +180,13 @@ const sendNextTurn = (player, turn) => {
 
 const sendAll = (action) => {
     if (action === 'newboard') {
+        console.log(initialboard)
         players.forEach(player => {
             sendNewBoardState(player)
         })
     }
     if (action === 'dice') {
-        diceState = 3//dice()
+        diceState = dice()
         players.forEach(player => {
             sendDiceState(player)
         })
@@ -174,6 +200,13 @@ const sendAll = (action) => {
         const turn = getTurn()
         players.forEach(player => {
             sendNextTurn(player, turn)
+        })
+    }
+    if (action === 'reset') {
+        players.forEach(player => {
+            send(player, {
+                type: 'reset'
+            })
         })
     }
 }
@@ -210,12 +243,11 @@ const handler = (ws) => {
                     if (row === 7) {
                         const diff = 6 - col
                         if (diff < diceState) {
-                            console.log('n')
                             moveable = false
                         }
                     }
                 } else if (action.color === 'green' && moveable) {
-                    if (row === 7) {
+                    if (row === 7 && col > 8) {
                         const diff = col - 8
                         if (diff < diceState) {
                             moveable = false
@@ -240,12 +272,12 @@ const handler = (ws) => {
                 }
                 if (moveable) {
                     console.log('moveable')
-                    const removeIndex = currentState[row][col].indexOf(action.color)
-                    currentState[row][col].splice(removeIndex, 1)
+                    const removeIndex = boardState[row][col].indexOf(action.color)
+                    boardState[row][col].splice(removeIndex, 1)
                     const updatedCoords = step(action.color, row, col, iskilled(row, col) ? 1 : diceState)
                     console.log(updatedCoords)
 
-                    let cell = currentState[updatedCoords[0]][updatedCoords[1]]
+                    let cell = boardState[updatedCoords[0]][updatedCoords[1]]
                     if (cell.length !== 0 && !cell.includes(action.color) && !isSafeSpot(updatedCoords[0], updatedCoords[1])) {
                         const totalSprites = cell.length
                         const color = cell[0]
@@ -255,16 +287,16 @@ const handler = (ws) => {
                         console.log('cond', color, sprites)
                         switch (color) {
                             case "blue":
-                                currentState[0][0].push(...sprites)
+                                boardState[0][0].push(...sprites)
                                 break;
                             case "red":
-                                currentState[0][14].push(...sprites)
+                                boardState[0][14].push(...sprites)
                                 break;
                             case "yellow":
-                                currentState[14][0].push(...sprites)
+                                boardState[14][0].push(...sprites)
                                 break;
                             case "green":
-                                currentState[14][14].push(...sprites)
+                                boardState[14][14].push(...sprites)
                                 break;
                             default:
                                 break;
@@ -275,7 +307,7 @@ const handler = (ws) => {
 
 
 
-                    currentState[updatedCoords[0]][updatedCoords[1]].push(action.color)
+                    boardState[updatedCoords[0]][updatedCoords[1]].push(action.color)
                     if (winningSpots.includes(`${updatedCoords[0]},${updatedCoords[1]}`)) {
                         wins[action.color]++
                         console.log(wins)
@@ -311,6 +343,7 @@ const handler = (ws) => {
 
 
 
+
 wss.on('connection', (ws) => {
     playerCount++
 
@@ -320,6 +353,7 @@ wss.on('connection', (ws) => {
     }
 
     playerColorMap.set(ws, playerColors[playerCount])
+
 
     send(ws, initMsg)
     players.push(ws)
@@ -332,7 +366,25 @@ wss.on('connection', (ws) => {
         sendAll('dice')
         currentPlayer = -1
         sendAll('turn')
-
         players.forEach(player => handler(player))
     }
+
+    ws.on('close', () => {
+        players.splice(players.indexOf(ws), 1)
+        // playerColorMap.delete(ws)
+        // playerCount--
+        // boardState = [...initialboard]
+
+        players.forEach(async (player) => {
+            await sendPromisify(player, {
+                type: 'reset'
+            })
+        })
+        resetGameState()
+        // sendAll('reset')
+
+        console.log('DISCONNECTED')
+    })
+
+
 })
